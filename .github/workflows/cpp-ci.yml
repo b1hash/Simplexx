@@ -52,7 +52,7 @@ jobs:
 
   build-windows-client:
     name: Build Windows Client
-    runs-on: Windows-latest
+    runs-on: [self-hosted, windows]
     strategy:
       matrix:
         configuration: [Release]
@@ -134,7 +134,7 @@ jobs:
 
   build-documentation:
     name: Build Documentation
-    runs-on: Windows-latest
+    runs-on: [self-hosted, windows]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
