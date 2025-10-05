@@ -13,18 +13,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+
       - name: Build Linux client
         working-directory: linux
         run: |
-          cmake .
-          make
+          cmake -B build -S .
+          cmake --build build -j$(nproc)
+
       - name: Archive Linux client
         uses: actions/upload-artifact@v4
         with:
           name: linux-client
-          path: linux/ghost
+          path: linux/build/ghost*
 
   static-analysis:
     name: Static Analysis
@@ -32,11 +35,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
+
       - name: Run cppcheck
         run: |
-          cppcheck --enable=all --inconclusive --quiet --std=c++11 --suppress=missingIncludeSystem .
+          cppcheck --enable=all --inconclusive --std=c++17 --quiet \
+            --suppress=missingIncludeSystem --exclude=lib --exclude=build .
 
   build-windows-client:
     name: Build Windows Client
@@ -56,6 +62,7 @@ jobs:
       CONFIGURATION: ${{ matrix.configuration }}
       PLATFORM: ${{ matrix.platform }}
       MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,40 +71,32 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
-      - name: 安装 MFC 组件
+
+      - name: Install MFC + ATL + v142/v143 Toolsets
+        shell: powershell
         run: |
-         choco install visualstudio2022-workload-nativedesktop
-        
+          Write-Host "Installing Visual Studio Build Tools with MFC, ATL and v142/v143 toolsets..."
+          choco install visualstudio2022buildtools --package-parameters `
+            "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+             --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
+             --add Microsoft.VisualStudio.Component.VC.ATLMFC `
+             --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
+             --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 `
+             --includeRecommended --includeOptional --quiet --norestart" -y
+          Write-Host "Visual Studio Build Tools installed successfully."
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
-
-      # 可选：用 vcpkg 安装第三方库（依赖见 Dependencies.md）
-      # 注意：HPSocket、shrink 通常不在 vcpkg，需要你在仓库 lib/ 下提供或在 vcxproj 中配置路径
-      # - name: Install dependencies with vcpkg (optional)
-      #   shell: powershell
-      #   run: |
-      #     $env:VCPKG_ROOT = "$env:RUNNER_TEMP\vcpkg"
-      #     git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
-      #     & $env:VCPKG_ROOT\bootstrap-vcpkg.bat
-      #     & $env:VCPKG_ROOT\vcpkg.exe integrate install
-      #     $triplet = if ("${{ matrix.platform }}" -eq "x64") { "x64-windows" } else { "x86-windows" }
-      #     & $env:VCPKG_ROOT\vcpkg.exe install `
-      #       zlib:$triplet `
-      #       zstd:$triplet `
-      #       jsoncpp:$triplet `
-      #       libjpeg-turbo:$triplet `
-      #       libyuv:$triplet `
-      #       ffmpeg:$triplet `
-      #       x264:$triplet
 
       - name: Build solution (2019Remote.sln)
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $sln = Join-Path $PWD '2019Remote.sln'
-          if (-not (Test-Path $sln)) { throw "Solution not found: $sln" }
-          # 注意：解决方案平台是 x64 / x86；项目内部会映射到 Win32/x64
-          & msbuild $sln /m /p:Configuration=$env:CONFIGURATION /p:Platform=$env:MSBUILD_PLATFORM
+          $sln = (Get-ChildItem -Recurse -Filter '2019Remote.sln' | Select-Object -First 1).FullName
+          if (-not $sln) { throw "Solution not found: $sln" }
+
+          Write-Host "Building solution $sln ..."
+          & msbuild $sln /m /p:Configuration=$env:CONFIGURATION /p:Platform=$env:MSBUILD_PLATFORM /p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM
           if ($LASTEXITCODE -ne 0) { throw "MSBuild failed." }
 
       - name: Collect artifacts
@@ -120,6 +119,7 @@ jobs:
         with:
           name: windows-client-${{ matrix.platform }}-${{ matrix.configuration }}
           path: dist/${{ matrix.platform }}/${{ matrix.configuration }}
+          retention-days: 7
 
   build-documentation:
     name: Build Documentation
@@ -139,3 +139,4 @@ jobs:
             使用方法.txt
             使用花生壳.txt
             反向代理.md
+          retention-days: 7
