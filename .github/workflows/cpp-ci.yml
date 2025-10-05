@@ -64,7 +64,10 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
-
+      - name: 安装 MFC 组件
+        run: |
+         choco install visualstudio2019-workload-nativedesktop
+        
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
