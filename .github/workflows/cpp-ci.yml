@@ -117,7 +117,7 @@ jobs:
             $buildDir = "build_deps"
 
             # Check if dependencies are already cached
-            $cacheHit = Test-Path "$depsDir\zstd" -and (Test-Path "$buildDir\zlib" -or (Get-ChildItem "$depsDir\*.zip" -ErrorAction SilentlyContinue).Count -gt 0)
+            $cacheHit = (Test-Path "$depsDir\zstd") -and ((Test-Path "$buildDir\zlib") -or ((Get-ChildItem "$depsDir\*.zip" -ErrorAction SilentlyContinue).Count -gt 0))
 
             if ($cacheHit) {
               Write-Host "Dependencies cache hit - skipping download and build"
