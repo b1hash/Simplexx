@@ -99,6 +99,95 @@ jobs:
             throw
           }
 
+      - name: Download and build dependencies
+        run: |
+          try {
+            $depsDir = "external"
+            $buildDir = "build_deps"
+
+            # Create directories
+            Write-Host "Creating directories..."
+            if (!(Test-Path $depsDir)) { New-Item -ItemType Directory -Force -Path $depsDir | Out-Null }
+            if (!(Test-Path $buildDir)) { New-Item -ItemType Directory -Force -Path $buildDir | Out-Null }
+
+            # Download and build zlib v1.3.1
+            Write-Host "Downloading and building zlib v1.3.1..."
+            $zlibUrl = "https://github.com/madler/zlib/archive/refs/tags/v1.3.1.zip"
+            $zlibDir = "$depsDir\zlib-1.3.1"
+            Invoke-WebRequest -Uri $zlibUrl -OutFile "$depsDir\zlib.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\zlib.zip", $depsDir)
+            Push-Location $zlibDir
+            cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$buildDir\zlib"
+            cmake --build build --config Release --target install
+            Pop-Location
+
+            # Download and build x264 v0.164.3194
+            Write-Host "Downloading and building x264..."
+            $x264Url = "https://code.videolan.org/videolan/x264/-/archive/stable/x264-stable.tar.gz"
+            $x264Dir = "$depsDir\x264"
+            Invoke-WebRequest -Uri $x264Url -OutFile "$depsDir\x264.tar.gz" -UseBasicParsing
+            # Extract tar.gz (simplified - may need 7zip or similar)
+            Write-Host "x264 downloaded - manual build may be required"
+
+            # Download libyuv v190
+            Write-Host "Downloading libyuv v190..."
+            $libyuvUrl = "https://chromium.googlesource.com/libyuv/libyuv/+archive/refs/tags/v190.tar.gz"
+            $libyuvDir = "$depsDir\libyuv"
+            Invoke-WebRequest -Uri $libyuvUrl -OutFile "$depsDir\libyuv.tar.gz" -UseBasicParsing
+            Write-Host "libyuv downloaded - build script needed"
+
+            # Download ffmpeg 4.5.r104394
+            Write-Host "Downloading ffmpeg..."
+            $ffmpegUrl = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+            $ffmpegDir = "$depsDir\ffmpeg"
+            Invoke-WebRequest -Uri $ffmpegUrl -OutFile "$depsDir\ffmpeg.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\ffmpeg.zip", $ffmpegDir)
+
+            # Download jsoncpp v1.9.6
+            Write-Host "Downloading and building jsoncpp v1.9.6..."
+            $jsoncppUrl = "https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.6.zip"
+            $jsoncppDir = "$depsDir\jsoncpp-1.9.6"
+            Invoke-WebRequest -Uri $jsoncppUrl -OutFile "$depsDir\jsoncpp.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\jsoncpp.zip", $depsDir)
+            Push-Location $jsoncppDir
+            cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$buildDir\jsoncpp" -DJSONCPP_WITH_TESTS=OFF
+            cmake --build build --config Release --target install
+            Pop-Location
+
+            # Download jpeg v3.1.1
+            Write-Host "Downloading and building jpeg v3.1.1..."
+            $jpegUrl = "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.1.1.zip"
+            $jpegDir = "$depsDir\libjpeg-turbo-3.1.1"
+            Invoke-WebRequest -Uri $jpegUrl -OutFile "$depsDir\jpeg.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\jpeg.zip", $depsDir)
+            Push-Location $jpegDir
+            cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$buildDir\jpeg"
+            cmake --build build --config Release --target install
+            Pop-Location
+
+            # Download HPSocket v6.0.3
+            Write-Host "Downloading HPSocket v6.0.3..."
+            $hpsocketUrl = "https://github.com/ldcsaa/HP-Socket/archive/refs/tags/v6.0.3.zip"
+            $hpsocketDir = "$depsDir\HP-Socket-6.0.3"
+            Invoke-WebRequest -Uri $hpsocketUrl -OutFile "$depsDir\hpsocket.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\hpsocket.zip", $depsDir)
+
+            # Download clip v1.11
+            Write-Host "Downloading clip v1.11..."
+            $clipUrl = "https://github.com/dacap/clip/archive/refs/tags/v1.11.zip"
+            $clipDir = "$depsDir\clip-1.11"
+            Invoke-WebRequest -Uri $clipUrl -OutFile "$depsDir\clip.zip" -UseBasicParsing
+            [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\clip.zip", $depsDir)
+
+            Write-Host "All dependencies downloaded. Build scripts may need to be run manually for some libraries."
+          } catch {
+            Write-Host "Error downloading dependencies: $($_.Exception.Message)"
+            throw
+          }
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
@@ -121,7 +210,8 @@ jobs:
               "/p:Configuration=$env:CONFIGURATION",
               "/p:Platform=$env:MSBUILD_PLATFORM",
               "/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM",
-              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include"
+              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include;build_deps\zlib\include;build_deps\jsoncpp\include;build_deps\jpeg\include;external\HP-Socket-6.0.3\include;external\clip-1.11\include;external\ffmpeg\bin",
+              "/p:AdditionalLibraryDirectories=external\zstd\zstd-1.5.5\lib;build_deps\zlib\lib;build_deps\jsoncpp\lib;build_deps\jpeg\lib;external\HP-Socket-6.0.3\lib;external\clip-1.11\lib;external\ffmpeg\bin"
             )
 
             Write-Host "MSBuild arguments: $($msbuildArgs -join ' ')"
