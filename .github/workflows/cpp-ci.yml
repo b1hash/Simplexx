@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y build-essential cmake
       - name: Build Linux client
@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install cppcheck
         run: sudo apt-get update && sudo apt-get install -y cppcheck
       - name: Run cppcheck
@@ -39,23 +39,91 @@ jobs:
           cppcheck --enable=all --inconclusive --quiet --std=c++11 --suppress=missingIncludeSystem .
 
   build-windows-client:
-    name: Build Windows Client (manual)
+    name: Build Windows Client
     runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [Release]
+        platform: [x64, x86]
+        include:
+          - platform: x64
+            msvc_arch: x64
+            msbuild_platform: x64
+          - platform: x86
+            msvc_arch: x86
+            msbuild_platform: x86
+    env:
+      CONFIGURATION: ${{ matrix.configuration }}
+      PLATFORM: ${{ matrix.platform }}
+      MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Show build instructions
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC dev cmd
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # 可选：用 vcpkg 安装第三方库（依赖见 Dependencies.md）
+      # 注意：HPSocket、shrink 通常不在 vcpkg，需要你在仓库 lib/ 下提供或在 vcxproj 中配置路径
+      # - name: Install dependencies with vcpkg (optional)
+      #   shell: powershell
+      #   run: |
+      #     $env:VCPKG_ROOT = "$env:RUNNER_TEMP\vcpkg"
+      #     git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
+      #     & $env:VCPKG_ROOT\bootstrap-vcpkg.bat
+      #     & $env:VCPKG_ROOT\vcpkg.exe integrate install
+      #     $triplet = if ("${{ matrix.platform }}" -eq "x64") { "x64-windows" } else { "x86-windows" }
+      #     & $env:VCPKG_ROOT\vcpkg.exe install `
+      #       zlib:$triplet `
+      #       zstd:$triplet `
+      #       jsoncpp:$triplet `
+      #       libjpeg-turbo:$triplet `
+      #       libyuv:$triplet `
+      #       ffmpeg:$triplet `
+      #       x264:$triplet
+
+      - name: Build solution (2019Remote.sln)
+        shell: powershell
         run: |
-          echo "Please build using Visual Studio (ghost_vs2015.vcxproj, TestRun_vs2015.vcxproj, SCLoader.vcxproj)"
-          echo "Dependencies: zlib, zstd, x264, libyuv, ffmpeg, jsoncpp, jpeg, HPSocket, shrink (see Dependencies.md)"
-          echo "Refer to ReadMe.md for details."
+          $ErrorActionPreference = 'Stop'
+          $sln = Join-Path $PWD '2019Remote.sln'
+          if (-not (Test-Path $sln)) { throw "Solution not found: $sln" }
+          # 注意：解决方案平台是 x64 / x86；项目内部会映射到 Win32/x64
+          & msbuild $sln /m /p:Configuration=$env:CONFIGURATION /p:Platform=$env:MSBUILD_PLATFORM
+          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed." }
+
+      - name: Collect artifacts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $outDir = "dist\${env:PLATFORM}\${env:CONFIGURATION}"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $patterns = @('*.exe','*.dll','*.pdb')
+          foreach ($pat in $patterns) {
+            Get-ChildItem -Recurse -File -Include $pat -Path . | Where-Object {
+              $_.DirectoryName -match "\\(x64|x86|Win32)\\$env:CONFIGURATION(\\|$)"
+            } | Copy-Item -Destination $outDir -Force -ErrorAction SilentlyContinue
+          }
+          Write-Host "Collected files in $outDir:"
+          Get-ChildItem -Recurse $outDir | ForEach-Object { $_.FullName }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-client-${{ matrix.platform }}-${{ matrix.configuration }}
+          path: dist/${{ matrix.platform }}/${{ matrix.configuration }}
 
   build-documentation:
     name: Build Documentation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Archive documentation
         uses: actions/upload-artifact@v4
         with:
@@ -68,4 +136,3 @@ jobs:
             使用方法.txt
             使用花生壳.txt
             反向代理.md
-
