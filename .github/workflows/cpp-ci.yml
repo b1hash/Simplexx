@@ -14,8 +14,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+      - name: Ensure build dependencies (only install if missing)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            $(for pkg in build-essential cmake; do dpkg -s $pkg >/dev/null 2>&1 || echo $pkg; done)
 
       - name: Build Linux client
         working-directory: linux
@@ -36,8 +39,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install cppcheck
-        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Ensure cppcheck (only install if missing)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            $(for pkg in cppcheck; do dpkg -s $pkg >/dev/null 2>&1 || echo $pkg; done)
 
       - name: Run cppcheck
         run: |
@@ -72,18 +78,23 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
 
-      - name: Install MFC + ATL + v142/v143 Toolsets
+      - name: Ensure Visual Studio Build Tools (only install if missing)
         shell: powershell
         run: |
-          Write-Host "Installing Visual Studio Build Tools with MFC, ATL and v142/v143 toolsets..."
-          choco install visualstudio2022buildtools --package-parameters `
-            "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-             --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
-             --add Microsoft.VisualStudio.Component.VC.ATLMFC `
-             --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
-             --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 `
-             --includeRecommended --includeOptional --quiet --norestart" -y
-          Write-Host "Visual Studio Build Tools installed successfully."
+          Write-Host "Checking Visual Studio Build Tools..."
+          $pkg = choco list --local-only | Select-String "visualstudio2022buildtools"
+          if (-not $pkg) {
+            Write-Host "Not found. Installing Visual Studio Build Tools with MFC, ATL and toolsets..."
+            choco install visualstudio2022buildtools --package-parameters `
+              "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+               --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
+               --add Microsoft.VisualStudio.Component.VC.ATLMFC `
+               --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
+               --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 `
+               --includeRecommended --includeOptional --quiet --norestart" -y
+          } else {
+            Write-Host "Visual Studio Build Tools already installed. Skipping."
+          }
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
@@ -127,6 +138,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Archive documentation
         uses: actions/upload-artifact@v4
         with:
