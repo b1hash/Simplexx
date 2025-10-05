@@ -27,16 +27,6 @@ jobs:
       MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
 
     steps:
-      - name: Setup Git
-        shell: powershell
-        run: |
-          git --version
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Git not found, installing..."
-            choco install git -y --no-progress
-            refreshenv
-          }
-          
       - name: Checkout code
         uses: actions/checkout@v4
         with:
