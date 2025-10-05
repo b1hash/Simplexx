@@ -76,7 +76,7 @@ jobs:
       - name: Download zstd source
         run: |
           try {
-            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-v1.5.5-win64.zip"
+            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip"
             $zstdDir = "external\zstd"
 
             Write-Host "Creating directory: $zstdDir"
@@ -131,10 +131,21 @@ jobs:
 
             # Download libyuv v190
             Write-Host "Downloading libyuv v190..."
-            $libyuvUrl = "https://chromium.googlesource.com/libyuv/libyuv/+archive/refs/tags/v190.tar.gz"
-            $libyuvDir = "$depsDir\libyuv"
-            Invoke-WebRequest -Uri $libyuvUrl -OutFile "$depsDir\libyuv.tar.gz" -UseBasicParsing
-            Write-Host "libyuv downloaded - build script needed"
+            try {
+              $libyuvUrl = "https://github.com/lemenkov/libyuv/archive/refs/tags/v190.tar.gz"
+              $libyuvDir = "$depsDir\libyuv"
+              Invoke-WebRequest -Uri $libyuvUrl -OutFile "$depsDir\libyuv.tar.gz" -UseBasicParsing
+              Write-Host "libyuv downloaded successfully"
+            } catch {
+              Write-Host "Primary libyuv URL failed, trying alternative..."
+              try {
+                $libyuvUrl = "https://github.com/lemenkov/libyuv/archive/refs/tags/v190.zip"
+                Invoke-WebRequest -Uri $libyuvUrl -OutFile "$depsDir\libyuv.zip" -UseBasicParsing
+                Write-Host "libyuv downloaded successfully (zip format)"
+              } catch {
+                Write-Host "Warning: Failed to download libyuv from all sources"
+              }
+            }
 
             # Download ffmpeg 4.5.r104394
             Write-Host "Downloading ffmpeg..."
@@ -164,6 +175,18 @@ jobs:
             cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$buildDir\jpeg"
             cmake --build build --config Release --target install
             Pop-Location
+
+            # Download shrink v0.0.1
+            Write-Host "Downloading shrink v0.0.1..."
+            try {
+              $shrinkUrl = "https://github.com/username/shrink/archive/refs/tags/v0.0.1.zip"
+              $shrinkDir = "$depsDir\shrink-0.0.1"
+              Invoke-WebRequest -Uri $shrinkUrl -OutFile "$depsDir\shrink.zip" -UseBasicParsing
+              [System.IO.Compression.ZipFile]::ExtractToDirectory("$depsDir\shrink.zip", $depsDir)
+              Write-Host "shrink downloaded successfully"
+            } catch {
+              Write-Host "Warning: Failed to download shrink - may need manual installation"
+            }
 
             # Download HPSocket v6.0.3
             Write-Host "Downloading HPSocket v6.0.3..."
@@ -210,8 +233,8 @@ jobs:
               "/p:Configuration=$env:CONFIGURATION",
               "/p:Platform=$env:MSBUILD_PLATFORM",
               "/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM",
-              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include;build_deps\zlib\include;build_deps\jsoncpp\include;build_deps\jpeg\include;external\HP-Socket-6.0.3\include;external\clip-1.11\include;external\ffmpeg\bin",
-              "/p:AdditionalLibraryDirectories=external\zstd\zstd-1.5.5\lib;build_deps\zlib\lib;build_deps\jsoncpp\lib;build_deps\jpeg\lib;external\HP-Socket-6.0.3\lib;external\clip-1.11\lib;external\ffmpeg\bin"
+              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include;build_deps\zlib\include;build_deps\jsoncpp\include;build_deps\jpeg\include;external\HP-Socket-6.0.3\include;external\clip-1.11\include;external\ffmpeg\bin;external\shrink-0.0.1\include",
+              "/p:AdditionalLibraryDirectories=external\zstd\zstd-1.5.5\lib;build_deps\zlib\lib;build_deps\jsoncpp\lib;build_deps\jpeg\lib;external\HP-Socket-6.0.3\lib;external\clip-1.11\lib;external\ffmpeg\bin;external\shrink-0.0.1\lib"
             )
 
             Write-Host "MSBuild arguments: $($msbuildArgs -join ' ')"
