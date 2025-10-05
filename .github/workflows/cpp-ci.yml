@@ -36,6 +36,17 @@ jobs:
         timeout-minutes: 10
         continue-on-error: false
 
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            external/
+            build_deps/
+          key: deps-${{ runner.os }}-${{ hashFiles('**/cpp-ci.yml') }}
+          restore-keys: |
+            deps-${{ runner.os }}-
+            deps-
+
       - name: Ensure Visual Studio Build Tools (only on self-hosted)
         if: runner.os == 'Windows'
         run: |
@@ -104,6 +115,19 @@ jobs:
           try {
             $depsDir = "external"
             $buildDir = "build_deps"
+
+            # Check if dependencies are already cached
+            $cacheHit = Test-Path "$depsDir\zstd" -and (Test-Path "$buildDir\zlib" -or (Get-ChildItem "$depsDir\*.zip" -ErrorAction SilentlyContinue).Count -gt 0)
+
+            if ($cacheHit) {
+              Write-Host "Dependencies cache hit - skipping download and build"
+              Write-Host "Cached directories:"
+              if (Test-Path $depsDir) { Get-ChildItem $depsDir | ForEach-Object { Write-Host "  $($_.FullName)" } }
+              if (Test-Path $buildDir) { Get-ChildItem $buildDir | ForEach-Object { Write-Host "  $($_.FullName)" } }
+              return
+            }
+
+            Write-Host "Dependencies cache miss - downloading and building..."
 
             # Create directories
             Write-Host "Creating directories..."
@@ -208,6 +232,26 @@ jobs:
             throw
           }
 
+      - name: Verify dependency cache
+        run: |
+          Write-Host "Verifying cached dependencies..."
+          $depsDir = "external"
+          $buildDir = "build_deps"
+
+          Write-Host "External dependencies:"
+          if (Test-Path $depsDir) {
+            Get-ChildItem $depsDir -Recurse | Where-Object { -not $_.PSIsContainer } | ForEach-Object {
+              Write-Host "  $($_.FullName)"
+            }
+          }
+
+          Write-Host "Built dependencies:"
+          if (Test-Path $buildDir) {
+            Get-ChildItem $buildDir -Recurse | Where-Object { -not $_.PSIsContainer } | ForEach-Object {
+              Write-Host "  $($_.FullName)"
+            }
+          }
+
       - name: Setup CMake
         uses: lukka/get-cmake@latest
 
@@ -226,11 +270,13 @@ jobs:
             Write-Host "Building solution: $sln"
             Write-Host "Configuration: $env:CONFIGURATION"
             Write-Host "Platform: $env:MSBUILD_PLATFORM"
+            Write-Host "Toolset: v142 (Visual Studio 2019)"
+            Write-Host "Using MFC: Yes"
 
             # Build include and library paths
             $workspaceRoot = Get-Location
             $includePaths = @(
-              "external\zstd\zstd-1.5.5\include",
+              "external\zstd\zstd-v1.5.5\include",
               "build_deps\zlib\include",
               "build_deps\jsoncpp\include",
               "build_deps\jpeg\include",
@@ -260,6 +306,7 @@ jobs:
               "/m",
               "/p:Configuration=$env:CONFIGURATION",
               "/p:Platform=$env:MSBUILD_PLATFORM",
+              "/p:PlatformToolset=v142",
               "/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM",
               "/p:AdditionalIncludeDirectories=""$includePathStr""",
               "/p:AdditionalLibraryDirectories=""$libPathStr"""
