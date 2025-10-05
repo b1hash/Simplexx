@@ -1,0 +1,71 @@
+name: Build & Test Simplexx
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-linux-client:
+    name: Build Linux Client
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake
+      - name: Build Linux client
+        working-directory: linux
+        run: |
+          cmake .
+          make
+      - name: Archive Linux client
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-client
+          path: linux/ghost
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all --inconclusive --quiet --std=c++11 --suppress=missingIncludeSystem .
+
+  build-windows-client:
+    name: Build Windows Client (manual)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Show build instructions
+        run: |
+          echo "Please build using Visual Studio (ghost_vs2015.vcxproj, TestRun_vs2015.vcxproj, SCLoader.vcxproj)"
+          echo "Dependencies: zlib, zstd, x264, libyuv, ffmpeg, jsoncpp, jpeg, HPSocket, shrink (see Dependencies.md)"
+          echo "Refer to ReadMe.md for details."
+
+  build-documentation:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Archive documentation
+        uses: actions/upload-artifact@v3
+        with:
+          name: docs
+          path: |
+            ReadMe.md
+            ReadMe_EN.md
+            Dependencies.md
+            history.md
+            使用方法.txt
+            使用花生壳.txt
+            反向代理.md
+
