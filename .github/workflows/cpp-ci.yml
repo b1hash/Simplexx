@@ -52,7 +52,7 @@ jobs:
 
   build-windows-client:
     name: Build Windows Client
-    runs-on: [self-hosted, windows]
+    runs-on: [self-hosted, windows]  # Ensure this is using your self-hosted Windows runner
     strategy:
       matrix:
         configuration: [Release]
@@ -86,11 +86,11 @@ jobs:
           if (-not $pkg) {
             Write-Host "Not found. Installing Visual Studio Build Tools with MFC, ATL and toolsets..."
             choco install visualstudio2022buildtools --package-parameters `
-              "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-               --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
-               --add Microsoft.VisualStudio.Component.VC.ATLMFC `
-               --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
-               --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 `
+              "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 ` 
+               --add Microsoft.VisualStudio.Component.Windows11SDK.22621 ` 
+               --add Microsoft.VisualStudio.Component.VC.ATLMFC ` 
+               --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 ` 
+               --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 ` 
                --includeRecommended --includeOptional --quiet --norestart" -y
           } else {
             Write-Host "Visual Studio Build Tools already installed. Skipping."
@@ -134,7 +134,7 @@ jobs:
 
   build-documentation:
     name: Build Documentation
-    runs-on: [self-hosted, windows]
+    runs-on: [self-hosted, windows]  # Ensure this is using your self-hosted Windows runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
