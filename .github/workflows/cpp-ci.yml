@@ -21,7 +21,7 @@ jobs:
           cmake .
           make
       - name: Archive Linux client
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-client
           path: linux/ghost
