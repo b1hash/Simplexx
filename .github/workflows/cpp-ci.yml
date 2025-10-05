@@ -76,7 +76,7 @@ jobs:
       - name: Download zstd source
         run: |
           try {
-            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-v1.5.5-win64.zip"
+            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip"
             $zstdDir = "external\zstd"
 
             Write-Host "Creating directory: $zstdDir"
@@ -227,14 +227,42 @@ jobs:
             Write-Host "Configuration: $env:CONFIGURATION"
             Write-Host "Platform: $env:MSBUILD_PLATFORM"
 
+            # Build include and library paths
+            $workspaceRoot = Get-Location
+            $includePaths = @(
+              "external\zstd\zstd-1.5.5\include",
+              "build_deps\zlib\include",
+              "build_deps\jsoncpp\include",
+              "build_deps\jpeg\include",
+              "external\HP-Socket-6.0.3\include",
+              "external\clip-1.11\include",
+              "external\ffmpeg\bin"
+            ) | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $workspaceRoot $_ }
+
+            $libPaths = @(
+              "external\zstd\zstd-1.5.5\lib",
+              "build_deps\zlib\lib",
+              "build_deps\jsoncpp\lib",
+              "build_deps\jpeg\lib",
+              "external\HP-Socket-6.0.3\lib",
+              "external\clip-1.11\lib",
+              "external\ffmpeg\bin"
+            ) | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $workspaceRoot $_ }
+
+            $includePathStr = $includePaths -join ";"
+            $libPathStr = $libPaths -join ";"
+
+            Write-Host "Include paths: $includePathStr"
+            Write-Host "Library paths: $libPathStr"
+
             $msbuildArgs = @(
               $sln,
               "/m",
               "/p:Configuration=$env:CONFIGURATION",
               "/p:Platform=$env:MSBUILD_PLATFORM",
               "/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM",
-              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include;build_deps\zlib\include;build_deps\jsoncpp\include;build_deps\jpeg\include;external\HP-Socket-6.0.3\include;external\clip-1.11\include;external\ffmpeg\bin;external\shrink-0.0.1\include",
-              "/p:AdditionalLibraryDirectories=external\zstd\zstd-1.5.5\lib;build_deps\zlib\lib;build_deps\jsoncpp\lib;build_deps\jpeg\lib;external\HP-Socket-6.0.3\lib;external\clip-1.11\lib;external\ffmpeg\bin;external\shrink-0.0.1\lib"
+              "/p:AdditionalIncludeDirectories=""$includePathStr""",
+              "/p:AdditionalLibraryDirectories=""$libPathStr"""
             )
 
             Write-Host "MSBuild arguments: $($msbuildArgs -join ' ')"
