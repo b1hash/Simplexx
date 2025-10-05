@@ -9,12 +9,11 @@ on:
 jobs:
   build-windows-client:
     name: Build Windows Client
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       matrix:
         configuration: [Release]
         platform: [x64, x86]
-        os: [self-hosted]  # Ensure this only runs on your self-hosted runner
         include:
           - platform: x64
             msvc_arch: x64
