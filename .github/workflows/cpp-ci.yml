@@ -286,7 +286,7 @@ jobs:
             ) | Where-Object { Test-Path $_ } | ForEach-Object { Join-Path $workspaceRoot $_ }
 
             $libPaths = @(
-              "external\zstd\zstd-1.5.5\lib",
+              "external\zstd\zstd-v1.5.5\lib",
               "build_deps\zlib\lib",
               "build_deps\jsoncpp\lib",
               "build_deps\jpeg\lib",
