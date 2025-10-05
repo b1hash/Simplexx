@@ -52,7 +52,7 @@ jobs:
 
   build-windows-client:
     name: Build Windows Client
-    runs-on: Windows x64
+    runs-on: Windows-latest
     strategy:
       matrix:
         configuration: [Release]
