@@ -38,36 +38,10 @@ jobs:
 
       - name: Ensure Visual Studio Build Tools (only on self-hosted)
         if: runner.os == 'Windows'
-        shell: powershell
+        shell: cmd
         run: |
-          try {
-            $chocoCmd = Get-Command choco -ErrorAction SilentlyContinue
-            if ($chocoCmd) {
-              Write-Host "Checking for Visual Studio Build Tools..."
-              $pkg = choco list --local-only | Select-String "visualstudio2019buildtools"
-              if (-not $pkg) {
-                Write-Host "Installing Visual Studio Build Tools..."
-                choco install visualstudio2019buildtools --package-parameters `
-                  "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-                   --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
-                   --add Microsoft.VisualStudio.Component.VC.ATLMFC `
-                   --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
-                   --add Microsoft.VisualStudio.Component.VC.ATLMFC.v142.x86.x64 `
-                   --includeRecommended --includeOptional --quiet --norestart" -y
-                if ($LASTEXITCODE -eq 0) {
-                  Write-Host "Visual Studio Build Tools installed successfully"
-                } else {
-                  Write-Host "Failed to install Visual Studio Build Tools"
-                }
-              } else {
-                Write-Host "Visual Studio Build Tools already installed"
-              }
-            } else {
-              Write-Host "Chocolatey not available, skipping Visual Studio installation"
-            }
-          } catch {
-            Write-Host "Error during Visual Studio setup: $($_.Exception.Message)"
-          }
+          echo Checking Visual Studio Build Tools...
+          powershell -Command "& { try { $chocoCmd = Get-Command choco -ErrorAction SilentlyContinue; if ($chocoCmd) { Write-Host 'Checking for Visual Studio Build Tools...'; $pkg = choco list --local-only | Select-String 'visualstudio2019buildtools'; if (-not $pkg) { Write-Host 'Installing Visual Studio Build Tools...'; choco install visualstudio2019buildtools --package-parameters \"--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows10SDK.19041 --add Microsoft.VisualStudio.Component.VC.ATLMFC --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 --add Microsoft.VisualStudio.Component.VC.ATLMFC.v142.x86.x64 --includeRecommended --includeOptional --quiet --norestart\" -y; if ($LASTEXITCODE -eq 0) { Write-Host 'Visual Studio Build Tools installed successfully' } else { Write-Host 'Failed to install Visual Studio Build Tools' } } else { Write-Host 'Visual Studio Build Tools already installed' } } else { Write-Host 'Chocolatey not available, skipping Visual Studio installation' } } catch { Write-Host \"Error during Visual Studio setup: $($_.Exception.Message)\" } }"
 
       - name: Setup MSVC dev cmd
         uses: ilammy/msvc-dev-cmd@v1
@@ -75,113 +49,25 @@ jobs:
           arch: ${{ matrix.msvc_arch }}
 
       - name: Download zstd source
-        shell: powershell
+        shell: cmd
         run: |
-          try {
-            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip"
-            $zstdDir = "external\zstd"
-            
-            Write-Host "Creating directory: $zstdDir"
-            if (!(Test-Path $zstdDir)) {
-              New-Item -ItemType Directory -Force -Path $zstdDir | Out-Null
-            }
-            
-            Write-Host "Downloading zstd from: $zstdUrl"
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri $zstdUrl -OutFile "$zstdDir\zstd.zip" -UseBasicParsing
-            
-            Write-Host "Extracting archive..."
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [System.IO.Compression.ZipFile]::ExtractToDirectory("$zstdDir\zstd.zip", $zstdDir)
-            
-            Write-Host "zstd directory contents:"
-            Get-ChildItem -Recurse $zstdDir | ForEach-Object { Write-Host "  $($_.FullName)" }
-          } catch {
-            Write-Host "Error downloading zstd: $($_.Exception.Message)"
-            throw
-          }
+          echo Starting zstd download process...
+          powershell -Command "& { try { $zstdUrl = 'https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip'; $zstdDir = 'external\zstd'; Write-Host 'Creating directory: $zstdDir'; if (!(Test-Path $zstdDir)) { New-Item -ItemType Directory -Force -Path $zstdDir | Out-Null }; Write-Host 'Downloading zstd from: $zstdUrl'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri $zstdUrl -OutFile \"$zstdDir\zstd.zip\" -UseBasicParsing; Write-Host 'Extracting archive...'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory(\"$zstdDir\zstd.zip\", $zstdDir); Write-Host 'zstd directory contents:'; Get-ChildItem -Recurse $zstdDir | ForEach-Object { Write-Host \"  $($_.FullName)\" } } catch { Write-Host \"Error downloading zstd: $($_.Exception.Message)\"; throw } }"
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Build solution (2019Remote.sln)
-        shell: powershell
+        shell: cmd
         run: |
-          try {
-            Write-Host "Searching for solution file..."
-            $sln = (Get-ChildItem -Recurse -Filter '2019Remote.sln' | Select-Object -First 1).FullName
-            if (-not $sln) { 
-              throw "Solution file '2019Remote.sln' not found" 
-            }
-            
-            Write-Host "Building solution: $sln"
-            Write-Host "Configuration: $env:CONFIGURATION"
-            Write-Host "Platform: $env:MSBUILD_PLATFORM"
-            
-            $msbuildArgs = @(
-              $sln,
-              "/m",
-              "/p:Configuration=$env:CONFIGURATION",
-              "/p:Platform=$env:MSBUILD_PLATFORM",
-              "/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM",
-              "/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include"
-            )
-            
-            Write-Host "MSBuild arguments: $($msbuildArgs -join ' ')"
-            & msbuild @msbuildArgs
-            
-            if ($LASTEXITCODE -ne 0) { 
-              throw "MSBuild failed with exit code: $LASTEXITCODE" 
-            }
-            Write-Host "Build completed successfully"
-          } catch {
-            Write-Host "Build error: $($_.Exception.Message)"
-            throw
-          }
+          echo Starting build process...
+          powershell -Command "& { try { Write-Host 'Searching for solution file...'; $sln = (Get-ChildItem -Recurse -Filter '2019Remote.sln' | Select-Object -First 1).FullName; if (-not $sln) { throw \"Solution file '2019Remote.sln' not found\" }; Write-Host \"Building solution: $sln\"; Write-Host \"Configuration: $env:CONFIGURATION\"; Write-Host \"Platform: $env:MSBUILD_PLATFORM\"; $msbuildArgs = @($sln, '/m', \"/p:Configuration=$env:CONFIGURATION\", \"/p:Platform=$env:MSBUILD_PLATFORM\", \"/p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM\", '/p:AdditionalIncludeDirectories=external\zstd\zstd-1.5.5\include'); Write-Host \"MSBuild arguments: $($msbuildArgs -join ' ')\"; & msbuild @msbuildArgs; if ($LASTEXITCODE -ne 0) { throw \"MSBuild failed with exit code: $LASTEXITCODE\" }; Write-Host 'Build completed successfully' } catch { Write-Host \"Build error: $($_.Exception.Message)\"; throw } }"
 
       - name: Collect artifacts
-        shell: powershell
+        shell: cmd
         run: |
-          try {
-            $outDir = "dist\${env:PLATFORM}\${env:CONFIGURATION}"
-            Write-Host "Creating output directory: $outDir"
-            if (!(Test-Path $outDir)) {
-              New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-            }
-            
-            $patterns = @('*.exe','*.dll','*.pdb')
-            Write-Host "Collecting artifacts with patterns: $($patterns -join ', ')"
-            
-            foreach ($pat in $patterns) {
-              Write-Host "Searching for files matching: $pat"
-              $files = Get-ChildItem -Recurse -File -Include $pat -Path . | Where-Object {
-                $_.DirectoryName -match "\\(x64|x86|Win32)\\$env:CONFIGURATION(\\|$)"
-              }
-              
-              Write-Host "Found $($files.Count) files matching $pat"
-              foreach ($file in $files) {
-                Write-Host "Copying: $($file.FullName)"
-                try {
-                  Copy-Item -Path $file.FullName -Destination $outDir -Force
-                } catch {
-                  Write-Host "Warning: Failed to copy $($file.FullName): $($_.Exception.Message)"
-                }
-              }
-            }
-            
-            Write-Host "Collected artifacts:"
-            $artifacts = Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue
-            if ($artifacts) {
-              $artifacts | ForEach-Object { 
-                Write-Host "  $($_.FullName)"
-              }
-            } else {
-              Write-Host "  No artifacts found in $outDir"
-            }
-          } catch {
-            Write-Host "Error collecting artifacts: $($_.Exception.Message)"
-            throw
-          }
+          echo Starting artifact collection...
+          powershell -Command "& { try { $outDir = \"dist\${env:PLATFORM}\${env:CONFIGURATION}\"; Write-Host \"Creating output directory: $outDir\"; if (!(Test-Path $outDir)) { New-Item -ItemType Directory -Force -Path $outDir | Out-Null }; $patterns = @('*.exe','*.dll','*.pdb'); Write-Host \"Collecting artifacts with patterns: $($patterns -join ', ')\"; foreach ($pat in $patterns) { Write-Host \"Searching for files matching: $pat\"; $files = Get-ChildItem -Recurse -File -Include $pat -Path . | Where-Object { $_.DirectoryName -match \"\\\\(x64|x86|Win32)\\\\$env:CONFIGURATION(\\\\\\|$)\" }; Write-Host \"Found $($files.Count) files matching $pat\"; foreach ($file in $files) { Write-Host \"Copying: $($file.FullName)\"; try { Copy-Item -Path $file.FullName -Destination $outDir -Force } catch { Write-Host \"Warning: Failed to copy $($file.FullName): $($_.Exception.Message)\" } } }; Write-Host 'Collected artifacts:'; $artifacts = Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue; if ($artifacts) { $artifacts | ForEach-Object { Write-Host \"  $($_.FullName)\" } } else { Write-Host \"  No artifacts found in $outDir\" } } catch { Write-Host \"Error collecting artifacts: $($_.Exception.Message)\"; throw } }"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
