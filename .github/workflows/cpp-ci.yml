@@ -79,15 +79,14 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Checking Visual Studio Build Tools..."
-          $pkg = choco list --local-only | Select-String "visualstudio2022buildtools"
+          $pkg = choco list --local-only | Select-String "visualstudio2019buildtools"
           if (-not $pkg) {
             Write-Host "Not found. Installing Visual Studio Build Tools with MFC, ATL and toolsets..."
-            choco install visualstudio2022buildtools --package-parameters `
+            choco install visualstudio2019buildtools --package-parameters `
               "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
                --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
                --add Microsoft.VisualStudio.Component.VC.ATLMFC `
                --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
-               --add Microsoft.VisualStudio.Component.VC.v143.x86.x64 `
                --add Microsoft.VisualStudio.Component.VC.ATLMFC.v142.x86.x64 `
                --includeRecommended --includeOptional --quiet --norestart" -y
           } else {
