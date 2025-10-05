@@ -52,7 +52,7 @@ jobs:
 
   build-windows-client:
     name: Build Windows Client
-    runs-on: windows-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         configuration: [Release]
