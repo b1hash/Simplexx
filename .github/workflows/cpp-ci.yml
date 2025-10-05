@@ -49,14 +49,15 @@ jobs:
         run: |
           cppcheck --enable=all --inconclusive --std=c++17 --quiet \
             --suppress=missingIncludeSystem --exclude=lib --exclude=build .
-
+            
   build-windows-client:
     name: Build Windows Client
-    runs-on: [self-hosted, windows]  # Ensure this is using your self-hosted Windows runner
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         configuration: [Release]
         platform: [x64, x86]
+        os: [windows-latest, self-hosted]  # 自动适配云端和本地
         include:
           - platform: x64
             msvc_arch: x64
@@ -73,18 +74,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup MSVC dev cmd
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: ${{ matrix.msvc_arch }}
-
-      - name: Ensure Visual Studio Build Tools (only install if missing)
+      # 云端 runner 预装 VS，无需安装，跳过自托管检测与安装
+      - name: Ensure Visual Studio Build Tools (自托管自动安装)
+        if: runner.os == 'Windows' && startsWith(runner.name, 'self-hosted')
         shell: powershell
         run: |
           Write-Host "Checking Visual Studio Build Tools..."
           $pkg = choco list --local-only | Select-String "visualstudio2022buildtools"
           if (-not $pkg) {
-            Write-Host "Not found. Installing Visual Studio Build Tools with MFC, ATL and toolsets..."
+            Write-Host "Not found. Installing Visual Studio Build Tools..."
             choco install visualstudio2022buildtools --package-parameters `
               "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 ` 
                --add Microsoft.VisualStudio.Component.Windows11SDK.22621 ` 
@@ -96,6 +94,13 @@ jobs:
             Write-Host "Visual Studio Build Tools already installed. Skipping."
           }
 
+      # 自动设置 MSVC 环境（云端与本地都适用，推荐 ilammy/msvc-dev-cmd@v1）
+      - name: Setup MSVC dev cmd
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      # 配置 MSBuild（云端已预装，自动适配）
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
