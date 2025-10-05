@@ -27,16 +27,6 @@ jobs:
       MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
 
     steps:
-      - name: Setup Git
-        shell: powershell
-        run: |
-          git --version
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "Git not found, installing..."
-            choco install git -y --no-progress
-            refreshenv
-          }
-          
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -204,24 +194,6 @@ jobs:
     name: Build Documentation
     runs-on: self-hosted  # Ensure this only runs on your self-hosted Windows runner
     steps:
-      - name: Setup Git
-        shell: cmd
-        run: |
-          echo Checking Git availability...
-          git --version >nul 2>&1
-          if errorlevel 1 (
-            echo Git not found, attempting to install...
-            choco install git -y --no-progress >nul 2>&1
-            if errorlevel 1 (
-              echo Failed to install Git via Chocolatey
-            ) else (
-              echo Git installed successfully
-              refreshenv
-            )
-          ) else (
-            echo Git is available
-          )
-          
       - name: Checkout code
         uses: actions/checkout@v4
         with:
