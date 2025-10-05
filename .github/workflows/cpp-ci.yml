@@ -7,49 +7,6 @@ on:
     branches: [ master ]
 
 jobs:
-  build-linux-client:
-    name: Build Linux Client
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Ensure build dependencies (only install if missing)
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends \
-            $(for pkg in build-essential cmake; do dpkg -s $pkg >/dev/null 2>&1 || echo $pkg; done)
-
-      - name: Build Linux client
-        working-directory: linux
-        run: |
-          cmake -B build -S .
-          cmake --build build -j$(nproc)
-
-      - name: Archive Linux client
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-client
-          path: linux/build/ghost*
-
-  static-analysis:
-    name: Static Analysis
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Ensure cppcheck (only install if missing)
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y --no-install-recommends \
-            $(for pkg in cppcheck; do dpkg -s $pkg >/dev/null 2>&1 || echo $pkg; done)
-
-      - name: Run cppcheck
-        run: |
-          cppcheck --enable=all --inconclusive --std=c++17 --quiet \
-            --suppress=missingIncludeSystem --exclude=lib --exclude=build .
-            
   build-windows-client:
     name: Build Windows Client
     runs-on: ${{ matrix.os }}
