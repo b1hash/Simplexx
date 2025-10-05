@@ -27,8 +27,24 @@ jobs:
       MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
 
     steps:
+      - name: Setup Git
+        shell: powershell
+        run: |
+          git --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Git not found, installing..."
+            choco install git -y --no-progress
+            refreshenv
+          }
+          
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+        timeout-minutes: 10
+        continue-on-error: false
 
       - name: Ensure Visual Studio Build Tools (only on self-hosted)
         if: runner.os == 'Windows' && runner.name == 'self-hosted'
@@ -95,8 +111,24 @@ jobs:
     name: Build Documentation
     runs-on: self-hosted  # Ensure this only runs on your self-hosted Windows runner
     steps:
+      - name: Setup Git
+        shell: powershell
+        run: |
+          git --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Git not found, installing..."
+            choco install git -y --no-progress
+            refreshenv
+          }
+          
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+        timeout-minutes: 10
+        continue-on-error: false
 
       - name: Archive documentation
         uses: actions/upload-artifact@v4
