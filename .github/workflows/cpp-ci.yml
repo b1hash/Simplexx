@@ -57,7 +57,7 @@ jobs:
       matrix:
         configuration: [Release]
         platform: [x64, x86]
-        os: [windows-latest, self-hosted]
+        os: [self-hosted]  # Ensure this only runs on your self-hosted runner
         include:
           - platform: x64
             msvc_arch: x64
@@ -137,7 +137,7 @@ jobs:
 
   build-documentation:
     name: Build Documentation
-    runs-on: [self-hosted, windows]  # Ensure this is using your self-hosted Windows runner
+    runs-on: self-hosted  # Ensure this only runs on your self-hosted Windows runner
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
