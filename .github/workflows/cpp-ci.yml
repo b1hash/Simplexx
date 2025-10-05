@@ -27,6 +27,16 @@ jobs:
       MSBUILD_PLATFORM: ${{ matrix.msbuild_platform }}
 
     steps:
+      - name: Setup Git
+        shell: powershell
+        run: |
+          git --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Git not found, installing..."
+            choco install git -y --no-progress
+            refreshenv
+          }
+          
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -37,18 +47,29 @@ jobs:
         continue-on-error: false
 
       - name: Ensure Visual Studio Build Tools (only on self-hosted)
-        if: runner.os == 'Windows' && runner.name == 'self-hosted'
-        shell: powershell
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          $pkg = choco list --local-only | Select-String "visualstudio2019buildtools"
-          if (-not $pkg) {
-            choco install visualstudio2019buildtools --package-parameters `
-              "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-               --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
-               --add Microsoft.VisualStudio.Component.VC.ATLMFC `
-               --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
-               --add Microsoft.VisualStudio.Component.VC.ATLMFC.v142.x86.x64 `
-               --includeRecommended --includeOptional --quiet --norestart" -y
+          try {
+            if (Get-Command choco -ErrorAction SilentlyContinue) {
+              $pkg = choco list --local-only | Select-String "visualstudio2019buildtools"
+              if (-not $pkg) {
+                Write-Host "Installing Visual Studio Build Tools..."
+                choco install visualstudio2019buildtools --package-parameters `
+                  "--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+                   --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
+                   --add Microsoft.VisualStudio.Component.VC.ATLMFC `
+                   --add Microsoft.VisualStudio.Component.VC.v142.x86.x64 `
+                   --add Microsoft.VisualStudio.Component.VC.ATLMFC.v142.x86.x64 `
+                   --includeRecommended --includeOptional --quiet --norestart" -y
+              } else {
+                Write-Host "Visual Studio Build Tools already installed"
+              }
+            } else {
+              Write-Host "Chocolatey not available, skipping Visual Studio installation"
+            }
+          } catch {
+            Write-Host "Error during Visual Studio setup: $_"
           }
 
       - name: Setup MSVC dev cmd
@@ -57,38 +78,83 @@ jobs:
           arch: ${{ matrix.msvc_arch }}
 
       - name: Download zstd source
-        shell: powershell
+        shell: pwsh
         run: |
-          $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip"
-          $zstdDir = "external\zstd"
-          mkdir $zstdDir
-          Invoke-WebRequest -Uri $zstdUrl -OutFile "$zstdDir\zstd.zip"
-          Expand-Archive -Path "$zstdDir\zstd.zip" -DestinationPath $zstdDir
-          Get-ChildItem -Recurse $zstdDir
+          try {
+            $zstdUrl = "https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5-win64.zip"
+            $zstdDir = "external\zstd"
+            
+            Write-Host "Creating directory: $zstdDir"
+            New-Item -ItemType Directory -Force -Path $zstdDir | Out-Null
+            
+            Write-Host "Downloading zstd from: $zstdUrl"
+            Invoke-WebRequest -Uri $zstdUrl -OutFile "$zstdDir\zstd.zip" -UseBasicParsing
+            
+            Write-Host "Extracting archive..."
+            Expand-Archive -Path "$zstdDir\zstd.zip" -DestinationPath $zstdDir -Force
+            
+            Write-Host "zstd directory contents:"
+            Get-ChildItem -Recurse $zstdDir | ForEach-Object { Write-Host $_.FullName }
+          } catch {
+            Write-Host "Error downloading zstd: $_"
+            throw
+          }
 
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
       - name: Build solution (2019Remote.sln)
-        shell: powershell
+        shell: pwsh
         run: |
-          $sln = (Get-ChildItem -Recurse -Filter '2019Remote.sln' | Select-Object -First 1).FullName
-          if (-not $sln) { throw "Solution not found: $sln" }
-          & msbuild $sln /m /p:Configuration=$env:CONFIGURATION /p:Platform=$env:MSBUILD_PLATFORM /p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM /p:AdditionalIncludeDirectories="external\zstd\zstd-1.5.5\include"
-          if ($LASTEXITCODE -ne 0) { throw "MSBuild failed." }
+          try {
+            $sln = (Get-ChildItem -Recurse -Filter '2019Remote.sln' | Select-Object -First 1).FullName
+            if (-not $sln) { throw "Solution file '2019Remote.sln' not found" }
+            
+            Write-Host "Building solution: $sln"
+            Write-Host "Configuration: $env:CONFIGURATION"
+            Write-Host "Platform: $env:MSBUILD_PLATFORM"
+            
+            & msbuild $sln /m /p:Configuration=$env:CONFIGURATION /p:Platform=$env:MSBUILD_PLATFORM /p:PreferredToolArchitecture=$env:MSBUILD_PLATFORM /p:AdditionalIncludeDirectories="external\zstd\zstd-1.5.5\include"
+            
+            if ($LASTEXITCODE -ne 0) { 
+              throw "MSBuild failed with exit code: $LASTEXITCODE" 
+            }
+            Write-Host "Build completed successfully"
+          } catch {
+            Write-Host "Build error: $_"
+            throw
+          }
 
       - name: Collect artifacts
-        shell: powershell
+        shell: pwsh
         run: |
-          $outDir = "dist\${env:PLATFORM}\${env:CONFIGURATION}"
-          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-          $patterns = @('*.exe','*.dll','*.pdb')
-          foreach ($pat in $patterns) {
-            Get-ChildItem -Recurse -File -Include $pat -Path . | Where-Object {
-              $_.DirectoryName -match "\\(x64|x86|Win32)\\$env:CONFIGURATION(\\|$)"
-            } | Copy-Item -Destination $outDir -Force -ErrorAction SilentlyContinue
+          try {
+            $outDir = "dist\${env:PLATFORM}\${env:CONFIGURATION}"
+            Write-Host "Creating output directory: $outDir"
+            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+            
+            $patterns = @('*.exe','*.dll','*.pdb')
+            Write-Host "Collecting artifacts with patterns: $($patterns -join ', ')"
+            
+            foreach ($pat in $patterns) {
+              $files = Get-ChildItem -Recurse -File -Include $pat -Path . | Where-Object {
+                $_.DirectoryName -match "\\(x64|x86|Win32)\\$env:CONFIGURATION(\\|$)"
+              }
+              
+              foreach ($file in $files) {
+                Write-Host "Copying: $($file.FullName)"
+                Copy-Item -Path $file.FullName -Destination $outDir -Force -ErrorAction SilentlyContinue
+              }
+            }
+            
+            Write-Host "Collected artifacts:"
+            Get-ChildItem -Recurse $outDir | ForEach-Object { 
+              Write-Host "  $($_.FullName)"
+            }
+          } catch {
+            Write-Host "Error collecting artifacts: $_"
+            throw
           }
-          Get-ChildItem -Recurse $outDir | ForEach-Object { $_.FullName }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -102,13 +168,18 @@ jobs:
     runs-on: self-hosted  # Ensure this only runs on your self-hosted Windows runner
     steps:
       - name: Setup Git
-        shell: powershell
+        shell: pwsh
         run: |
-          git --version
-          if ($LASTEXITCODE -ne 0) {
+          try {
+            git --version
+            Write-Host "Git is available"
+          } catch {
             Write-Host "Git not found, installing..."
-            choco install git -y --no-progress
-            refreshenv
+            if (Get-Command choco -ErrorAction SilentlyContinue) {
+              choco install git -y --no-progress
+            } else {
+              Write-Host "Chocolatey not found, please install Git manually"
+            }
           }
           
       - name: Checkout code
